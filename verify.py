@@ -17,8 +17,8 @@ from mpmath import mp
 mode = "cohorizontal"
 mth = math
 
-count = int(1e4)
-seed = 1
+count = int(1e7)
+seed = 1000
 eps = 1e-10
 switchToMP = 1e-5
 
@@ -432,7 +432,11 @@ if __name__ == '__main__':
     switchedToMP = 0
     
     for i in range(count):
-        camera,landmarks = generator()
+        while True:
+            camera,landmarks = generator()
+            s = howManySolutions(camera,landmarks, assumeOnPlane=assumeOnPlaneForPredictions) 
+            if s != mth.inf: # degenerate case
+                break
         try:
             n,p,o,sols = compute(camera,landmarks,assumeOnPlaneForPredictions=assumeOnPlaneForPredictions,assumeOnPlaneForSolutions=assumeOnPlaneForSolutions)
         except AssertionError as e:
