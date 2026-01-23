@@ -1,6 +1,7 @@
 import math
 import random
 import numbers
+import sys
 from mpmath import mp
 
 
@@ -13,12 +14,9 @@ from mpmath import mp
 #
 
 
-#mode = "fullyRandom" 
-#mode = "onPlane"
-mode = "cohorizontal"
 mth = math
 
-count = int(1e6)
+count = int(1e7)
 seed = 1001
 eps = 1e-10
 cameraPositionEps = 1e-15
@@ -127,6 +125,8 @@ class array:
 #         d = horizontal distance between landmarks
 #         rho[0], rho[1] = observed tilt angles
 #         beta           = observed horizontal landmark angle from landmark 1 to 2
+#         assumeOnPlane  = assume that the camera is on the "critical plane", defined by the landmarks
+#                          and a horizontal line through one of them and perpendicular to the other
 #
 #     (h1,d1,h2,d2)
 #         where: hi is altitude of camera above landmark i
@@ -284,8 +284,11 @@ def det3x3(a):
           
 #
 # inputs: 
-#      camera:       position (x,y,z) of camera (z=altitude)
-#      landmarks[i]: position (x,y,z) of landmark i (z=altitude)
+#      camera:        position (x,y,z) of camera (z=altitude)
+#      landmarks[i]:  position (x,y,z) of landmark i (z=altitude)
+#      assumeOnPlane: assume that the camera is on the "critical plane"
+#
+
 # outputs: integer
 # algorithm: use characterization in Theorem 1
 # assuming landmarks are not at the same point
@@ -430,21 +433,36 @@ def generateCameraOnPlane_mp():
 def generateWithCohorizontalLandmarks():
     camera, landmarks = generateFullyRandom()
     return camera, array((landmarks[0],((landmarks[1][0],landmarks[1][2],landmarks[0][2]))))
-    
-if mode == "fullyRandom":
-    generator = generateFullyRandom
-    assumeOnPlaneForSolutions = False
-    assumeOnPlaneForPredictions = False
-elif mode == "onPlane":
-    generator = generateCameraOnPlane
-    assumeOnPlaneForSolutions = False
-    assumeOnPlaneForPredictions = True
-elif mode == "cohorizontal":
-    generator = generateWithCohorizontalLandmarks
-    assumeOnPlaneForSolutions = False
-    assumeOnPlaneForPredictions = False
+
+def setMode(mode):  
+    global generator,assumeOnPlaneForSolutions,assumeOnPlaneForPredictions
+    if mode.lower() == "fullyrandom":
+        generator = generateFullyRandom
+        assumeOnPlaneForSolutions = False
+        assumeOnPlaneForPredictions = False
+    elif mode.lower() == "onplane":
+        generator = generateCameraOnPlane
+        assumeOnPlaneForSolutions = False
+        assumeOnPlaneForPredictions = True
+    elif mode.lower() == "cohorizontal":
+        generator = generateWithCohorizontalLandmarks
+        assumeOnPlaneForSolutions = False
+        assumeOnPlaneForPredictions = False
+    else:
+        assert False, "Unknown mode"
 
 if __name__ == '__main__':
+    if len(sys.argv)>1:
+        mode = sys.argv[1]
+    else:
+        mode = "fullyRandom"
+    setMode(mode)
+    if len(sys.argv)>2:
+        seed = int(sys.argv[2])
+    print("mode=",mode)
+    print("seed=",seed)
+    print("n=",count)
+
     random.seed(seed)
     errNumber = 0
     errPosition = 0
@@ -464,17 +482,15 @@ if __name__ == '__main__':
         try:
             n,p,o,sols = compute(camera,landmarks,assumeOnPlaneForPredictions=assumeOnPlaneForPredictions,assumeOnPlaneForSolutions=assumeOnPlaneForSolutions)
         except AssertionError as e:
-            p = switchToMP*2
+            p = math.inf
         if n > 0:
-            p = switchToMP*2
+            p = math.inf
         if p > switchToMP and mth != mp:
             mth = mp
             mpcamera = camera.mpf()
             mplandmarks = landmarks.mpf()
             n,p,o,sols = compute(mpcamera,mplandmarks,verbose=False,assumeOnPlaneForPredictions=assumeOnPlaneForPredictions,assumeOnPlaneForSolutions=assumeOnPlaneForSolutions)
-#            if n != 0:
-#                compute(mpcamera,mplandmarks,verbose=True,assumeOnPlaneForPredictions=assumeOnPlaneForPredictions,assumeOnPlaneForSolutions=assumeOnPlaneForSolutions)
-            if p > 1:
+            if p == math.inf:
                 print("really bad",p)
                 print("camera",mpcamera)
                 print("landmarks",mplandmarks)
@@ -490,8 +506,8 @@ if __name__ == '__main__':
         if sols == 1:
             totalOneSolution += 1
 
-    print("n=",count)
     print("one solution ratio=",totalOneSolution/count)
     print("Worst errors: %d %g %g" % (errNumber,errPosition,errObservation))
     print("Average errors: %g %g %g" % (totalNumberError/count,totalPositionError/count,totalObservationError/count))
     print("Ratio switched to MP: %g" % (switchedToMP/count))
+     
