@@ -4,6 +4,7 @@ import numbers
 from mpmath import mp
 
 
+# author: Alexander Pruss
 # license: MIT
 
 #
@@ -17,12 +18,13 @@ from mpmath import mp
 mode = "cohorizontal"
 mth = math
 
-count = int(1e7)
-seed = 1000
+count = int(1e6)
+seed = 1001
 eps = 1e-10
+cameraPositionEps = 1e-15
 switchToMP = 1e-5
 
-mp.dps = 20
+mp.dps = 15
 mp.prec = 150
 
 class array:
@@ -85,6 +87,9 @@ class array:
                 d += self.data[i] * a[i]
             return d
             
+    def __repr__(self):
+        return str(self)
+        
     def __str__(self):
         out = "[ "
         for b in self:
@@ -118,7 +123,6 @@ class array:
     def cross(self,b):
         return array( ( self[1]*b[2]-self[2]*b[1], self[2]*b[0]-self[0]*b[2], self[0]*b[1]-self[1]*b[0] ) )
 
-# author: Alexander Pruss
 # inputs: H = m23-m12 = altitude of landmark 2 above landmark 1
 #         d = horizontal distance between landmarks
 #         rho[0], rho[1] = observed tilt angles
@@ -134,15 +138,19 @@ class array:
 def cot(x):
     return 1/mth.tan(x)
 
-def solve(H, d, rho, beta, assumeOnPlane=False):
+def solve(H, d, rho, beta, assumeOnPlane=False, verbose=False):
     if abs(rho[0]) <= eps or abs(rho[0]-mth.pi) <= eps:
         assert not( abs(rho[1]) < eps or abs(rho[1]-mth.pi) < eps )
+        if verbose:
+            print("solved d1=0")
         d1 = 0.
         d2 = d
         h2 = -d * cot(rho[1])
         h1 = h2 + H
         return [(h1,d1,h2,d2),]
     elif abs(rho[1]) <= eps or abs(rho[1]-mth.pi) <= eps:
+        if verbose:
+            print("solved d2=0")
         d2 = 0.
         d1 = d
         h1 = -d * cot(rho[0])
@@ -182,6 +190,8 @@ def solve(H, d, rho, beta, assumeOnPlane=False):
     
     if assumeOnPlane or abs(discriminant) <= eps:
         dj = -b / (2 * a)
+        if verbose:
+            print("solved, zeroish disriminant, dj=",dj)
         solution = finishSolution(dj)
         if not solution:
             return []
@@ -194,6 +204,8 @@ def solve(H, d, rho, beta, assumeOnPlane=False):
     
     for s in [-1,1]:
         dj = ( -b + s*mth.sqrt(discriminant) ) / (2 * a)
+        if verbose:
+            print("dj is",dj)
         if dj > 0:
             solution = finishSolution(dj)
             if solution:
@@ -207,17 +219,18 @@ def solve(H, d, rho, beta, assumeOnPlane=False):
 def intersectionOfCircles(A,rA,B,rB):
     diff = B-A
     d = diff.norm()
-    if abs(rA-rB-d) <= eps:
-        # one solution
-        # return appropriate affine combination of points A and B
-        return [ (A * rB + B * rA) / (rA+rB), ]
+    
+    # one solution
+    singleIntersection = abs(rA-rB-d) <= eps
         
     # rotate problem so A lies at origin and B at (d,0)
     # to go from there to original problem, rotate by matrix and add A
     matrix = array( [ [diff[0],-diff[1]], [diff[1],diff[0]] ] ) / d
+    if singleIntersection:
+        xy = array([ rA, 0. ])
+        return (  A + array( matrix.dot( xy ) ), )
     # cf. https://mathworld.wolfram.com/Circle-CircleIntersection.html
     x = (rA**2 - rB**2)/(2*d) + 0.5*d
-    
     assert(rA**2>=x**2)
 
     out = []
@@ -234,17 +247,24 @@ def intersectionOfCircles(A,rA,B,rB):
 #
 # algorithm: follow ideas in proof of Lemma 2
 
-def getCameraPosition(solution, beta, landmarks):
+def getCameraPosition(solution, beta, landmarks, verbose=False):
     h1,d1,h2,d2 = solution
     m = array([ landmarks[0], landmarks[1] ])
-    if d1 <= eps:
+    if d1 <= cameraPositionEps:
+        if verbose:
+            print("small d1",d1)
         return m[0] + [0,0,h1]
-    if d2 <= eps:
+    if d2 <= cameraPositionEps:
+        if verbose:
+            print("small d2",d2)
         return m[1] + [0,0,h2]
     assert beta != 0
     A = array((m[0][0], m[0][1]))
     B = array((m[1][0], m[1][1]))
     cc = intersectionOfCircles(A,d1,B,d2)
+    if verbose:
+        print("d=",(B-A).norm())
+        print("circle intersections",cc)
     for C in cc:
         # the sign of s is the same as that of the signed angle ACB
         AC = A-C
@@ -353,11 +373,11 @@ def compute(camera, landmarks, verbose=False, assumeOnPlaneForSolutions=False, a
         gh1 = camera[2]-landmarks[0][2]
         gh2 = camera[2]-landmarks[1][2]
         print("ground truth h1,d1,h2,d2: ",gh1,gd1,gh2,gd2)
-    rho,beta = getObservations(camera, landmarks)
     expectedSolutions = howManySolutions(camera,landmarks, assumeOnPlane=assumeOnPlaneForPredictions) 
+    rho,beta = getObservations(camera, landmarks)
     if expectedSolutions == mth.inf:
         return None
-    solutions = solve(H,d,rho,beta,assumeOnPlane=assumeOnPlaneForSolutions)
+    solutions = solve(H,d,rho,beta,assumeOnPlane=assumeOnPlaneForSolutions,verbose=verbose)
     errPosition = mth.inf
     errObservation = 0
     if verbose and len(solutions) != expectedSolutions:
@@ -368,10 +388,14 @@ def compute(camera, landmarks, verbose=False, assumeOnPlaneForSolutions=False, a
         for solution in solutions:
             solvedC = getCameraPosition(solution, beta, landmarks)
             if verbose:
-                print(solution)
-                print(solvedC)
+                print("solution",solution)
+                print("camera",solvedC)
+                gcc = getCameraPosition([gh1,gd1,gh2,gd2],beta,landmarks,verbose=True)
+                print("camera according to ground truth",gcc)
+                print("delta",solvedC-gcc)
             e = (solvedC-camera).norm()
             errPosition = min(e, errPosition)
+            # Problem here!
             solvedRho,solvedBeta = getObservations(solvedC, landmarks)
             e = (array((solvedRho[0],solvedRho[1],solvedBeta))-(rho[0],rho[1],beta)).norm()
             errObservation = max(e, errObservation)
@@ -450,6 +474,11 @@ if __name__ == '__main__':
             n,p,o,sols = compute(mpcamera,mplandmarks,verbose=False,assumeOnPlaneForPredictions=assumeOnPlaneForPredictions,assumeOnPlaneForSolutions=assumeOnPlaneForSolutions)
 #            if n != 0:
 #                compute(mpcamera,mplandmarks,verbose=True,assumeOnPlaneForPredictions=assumeOnPlaneForPredictions,assumeOnPlaneForSolutions=assumeOnPlaneForSolutions)
+            if p > 1:
+                print("really bad",p)
+                print("camera",mpcamera)
+                print("landmarks",mplandmarks)
+                compute(mpcamera,mplandmarks,verbose=True,assumeOnPlaneForPredictions=assumeOnPlaneForPredictions,assumeOnPlaneForSolutions=assumeOnPlaneForSolutions)
             switchedToMP += 1
             mth = math
         errNumber = max(errNumber,abs(n))
