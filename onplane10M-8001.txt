@@ -1,0 +1,7 @@
+mode= onplane
+seed= 8001
+n= 10000000
+one solution ratio= 1.0
+Worst errors: 0 0.264207 1.33767e-09
+Average errors: 0 4.3681e-08 7.09735e-15
+Ratio switched to MP: 0.801598

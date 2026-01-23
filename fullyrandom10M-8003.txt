@@ -1,0 +1,7 @@
+mode= fullyrandom
+seed= 8003
+n= 10000000
+one solution ratio= 0.6666332
+Worst errors: 0 9.94334e-06 0.000397524
+Average errors: 0 2.6604e-10 5.78242e-11
+Ratio switched to MP: 2.67e-05

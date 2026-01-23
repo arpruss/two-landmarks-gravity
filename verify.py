@@ -18,7 +18,8 @@ mth = math
 
 count = int(1e7)
 seed = 1001
-eps = 1e-10
+eps = 1e-14
+minimalLandmarkDistance = 0
 cameraPositionEps = 1e-15
 switchToMP = 1e-5
 
@@ -191,7 +192,7 @@ def solve(H, d, rho, beta, assumeOnPlane=False, verbose=False):
     if assumeOnPlane or abs(discriminant) <= eps:
         dj = -b / (2 * a)
         if verbose:
-            print("solved, zeroish disriminant, dj=",dj)
+            print("solved, zeroish disriminant, dj=",dj,a,c)
         solution = finishSolution(dj)
         if not solution:
             return []
@@ -367,15 +368,9 @@ def getObservations(camera, landmarks):
 #                       simulated observations of the ground truth; Euclidean distance on the
 #                       triple (rho[0],rho[1],beta)
   
-def compute(camera, landmarks, verbose=False, assumeOnPlaneForSolutions=False, assumeOnPlaneForPredictions=False):
+def compute(camera, landmarks, verbose=False, assumeOnPlaneForSolutions=False, assumeOnPlaneForPredictions=False,msg=""):
     H = landmarks[1][2]-landmarks[0][2]
     d = mth.hypot( landmarks[1][0]-landmarks[0][0], landmarks[1][1]-landmarks[0][1] )
-    if verbose:
-        gd1 = mth.hypot( camera[0]-landmarks[0][0], camera[1]-landmarks[0][1] )
-        gd2 = mth.hypot( camera[0]-landmarks[1][0], camera[1]-landmarks[1][1] )
-        gh1 = camera[2]-landmarks[0][2]
-        gh2 = camera[2]-landmarks[1][2]
-        print("ground truth h1,d1,h2,d2: ",gh1,gd1,gh2,gd2)
     expectedSolutions = howManySolutions(camera,landmarks, assumeOnPlane=assumeOnPlaneForPredictions) 
     rho,beta = getObservations(camera, landmarks)
     if expectedSolutions == mth.inf:
@@ -390,11 +385,21 @@ def compute(camera, landmarks, verbose=False, assumeOnPlaneForSolutions=False, a
     else:
         for solution in solutions:
             solvedC = getCameraPosition(solution, beta, landmarks)
-            if verbose:
+            if verbose or solvedC[0]==landmarks[0][0]:
+                print("message:",msg)
+                print("camera",camera)
+                solve(H,d,rho,beta,assumeOnPlane=assumeOnPlaneForSolutions,verbose=True)
+                print("landmarks",landmarks)
+                print("solutions",solutions)
+                gd1 = mth.hypot( camera[0]-landmarks[0][0], camera[1]-landmarks[0][1] )
+                gd2 = mth.hypot( camera[0]-landmarks[1][0], camera[1]-landmarks[1][1] )
+                gh1 = camera[2]-landmarks[0][2]
+                gh2 = camera[2]-landmarks[1][2]
+                print("ground truth h1,d1,h2,d2: ",gh1,gd1,gh2,gd2)
                 print("solution",solution)
-                print("camera",solvedC)
+                print("solved camera",solvedC)
                 gcc = getCameraPosition([gh1,gd1,gh2,gd2],beta,landmarks,verbose=True)
-                print("camera according to ground truth",gcc)
+                print("camera according to ground truth solution",gcc)
                 print("delta",solvedC-gcc)
             e = (solvedC-camera).norm()
             errPosition = min(e, errPosition)
@@ -476,11 +481,14 @@ if __name__ == '__main__':
     for i in range(count):
         while True:
             camera,landmarks = generator()
+            if (landmarks[0]-landmarks[1]).norm() < minimalLandmarkDistance:
+                continue
             s = howManySolutions(camera,landmarks, assumeOnPlane=assumeOnPlaneForPredictions) 
             if s != mth.inf: # degenerate case
                 break
         try:
-            n,p,o,sols = compute(camera,landmarks,assumeOnPlaneForPredictions=assumeOnPlaneForPredictions,assumeOnPlaneForSolutions=assumeOnPlaneForSolutions)
+            n = 0
+            n,p,o,sols = compute(camera,landmarks,assumeOnPlaneForPredictions=assumeOnPlaneForPredictions,assumeOnPlaneForSolutions=assumeOnPlaneForSolutions,msg=str(i))
         except AssertionError as e:
             p = math.inf
         if n > 0:

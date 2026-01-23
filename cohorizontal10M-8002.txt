@@ -1,0 +1,7 @@
+mode= cohorizontal
+seed= 8002
+n= 10000000
+one solution ratio= 1.0
+Worst errors: 0 3.65469e-07 2.24691e-08
+Average errors: 0 3.5524e-13 8.6193e-15
+Ratio switched to MP: 0
