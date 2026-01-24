@@ -20,7 +20,7 @@ count = int(1e7)
 seed = 1001
 eps = 1e-14
 minimalLandmarkDistance = 0
-cameraPositionEps = 1e-15
+cameraPositionEps = eps
 switchToMP = 1e-5
 
 mp.dps = 15
