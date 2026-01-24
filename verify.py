@@ -479,6 +479,8 @@ if __name__ == '__main__':
     switchedToMP = 0
     
     for i in range(count):
+        if i % 100000 == 0:
+            print("[%d]" % i, file=sys.stderr)
         while True:
             camera,landmarks = generator()
             if (landmarks[0]-landmarks[1]).norm() < minimalLandmarkDistance:
